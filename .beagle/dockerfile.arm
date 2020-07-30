@@ -4,7 +4,7 @@ FROM $BASE
 LABEL maintainer=mengkzhaoyun@gmail.com
 
 RUN apk add --no-cache cifs-utils ca-certificates \
-    && adduser -D -u 1000 chartmuseum && ls -al
+    && adduser -D -u 1000 chartmuseum && pwd && find / -name 'chartmuseum'
 
 COPY ./dist/chartmuseum /chartmuseum
 
