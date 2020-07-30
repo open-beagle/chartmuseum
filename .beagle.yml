@@ -40,8 +40,8 @@ pipeline:
     image: registry.cn-qingdao.aliyuncs.com/wod/devops-harbor:1.0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    repo: wod/awecloud-chartmuseum
-    tag: "v0.12.0-v1.8.6"
+    repo: wod/awecloud-harbor-chartmuseum
+    tag: "v1.8.6"
     registry: registry.cn-qingdao.aliyuncs.com
     secrets: 
       - source: REGISTRY_USER_ALIYUN
