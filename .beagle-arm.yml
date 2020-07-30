@@ -18,7 +18,6 @@ pipeline:
     volumes:
       - /data/cache/golang/mod:/go/pkg/mod
 
-
     binary: chartmuseum
     main: cmd/chartmuseum
 
