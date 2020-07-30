@@ -1,0 +1,50 @@
+platform: 10.11.92.33
+
+workspace:
+  path: src/helm.sh/chartmuseum
+
+clone:
+  git:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-git:1.0
+    pull: true
+    dns: 223.5.5.5
+
+pipeline:
+
+  golang:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go:1.14.6-alpine
+    pull: true
+    dns: 223.5.5.5
+    volumes:
+      - /data/cache/golang/pkg:/go/pkg
+    binary: chartmuseum
+    main: cmd/chartmuseum
+
+  docker:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker:1.0
+    pull: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    base: registry.cn-qingdao.aliyuncs.com/wod/alpine:3.12
+    dockerfile: .beagle/dockerfile
+    repo: wod/awecloud-chartmuseum
+    version: "v0.12.0"
+    registry: registry.cn-qingdao.aliyuncs.com
+    secrets: 
+      - source: REGISTRY_USER_ALIYUN
+        target: REGISTRY_USER
+      - source: REGISTRY_PASSWORD_ALIYUN
+        target: REGISTRY_PASSWORD
+
+  harbor:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-harbor:1.0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    repo: wod/awecloud-chartmuseum
+    tag: "v0.12.0-v1.8.6"
+    registry: registry.cn-qingdao.aliyuncs.com
+    secrets: 
+      - source: REGISTRY_USER_ALIYUN
+        target: REGISTRY_USER
+      - source: REGISTRY_PASSWORD_ALIYUN
+        target: REGISTRY_PASSWORD     

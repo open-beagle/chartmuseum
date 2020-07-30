@@ -1,0 +1,14 @@
+ARG BASE
+
+FROM $BASE
+LABEL maintainer=mengkzhaoyun@gmail.com
+
+RUN apk add --no-cache cifs-utils ca-certificates \
+    && adduser -D -u 1000 chartmuseum
+
+COPY dist/chartmuseum /chartmuseum
+
+VOLUME ["/chart_storage"]
+EXPOSE 9999
+USER 1000
+ENTRYPOINT ["/chartmuseum"]
