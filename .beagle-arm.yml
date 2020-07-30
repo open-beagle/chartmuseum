@@ -11,13 +11,12 @@ clone:
 
 pipeline:
   golang:
-    image: registry.cn-qingdao.aliyuncs.com/wod/golang-arm64:1.14.6-buster
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go:1.14.6-alpine
     dns: 223.5.5.5
     volumes:
       - /data/cache/golang/mod:/go/pkg/mod
     binary: chartmuseum
     main: cmd/chartmuseum
-
 
   docker:
     image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker-arm64:1.0
