@@ -27,7 +27,7 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     base: registry.cn-qingdao.aliyuncs.com/wod/alpine-arm64:3.9
-    dockerfile: .beagle/dockerfile
+    dockerfile: .beagle/dockerfile.arm
     repo: wod/awecloud-chartmuseum-arm64
     version: "v0.12.0"
     registry: registry.cn-qingdao.aliyuncs.com
