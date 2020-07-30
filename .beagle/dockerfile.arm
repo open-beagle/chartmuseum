@@ -6,7 +6,7 @@ LABEL maintainer=mengkzhaoyun@gmail.com
 RUN apk add --no-cache cifs-utils ca-certificates \
     && adduser -D -u 1000 chartmuseum && pwd && find / -name 'chartmuseum'
 
-COPY /home/chartmuseum /chartmuseum
+COPY ./dist/chartmuseum /chartmuseum
 
 VOLUME ["/chart_storage"]
 EXPOSE 9999
