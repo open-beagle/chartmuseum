@@ -1,4 +1,4 @@
-platform: 10.11.92.33
+platform: 172.16.0.120
 
 workspace:
   path: src/helm.sh/chartmuseum
