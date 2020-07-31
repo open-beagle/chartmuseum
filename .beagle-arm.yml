@@ -23,7 +23,7 @@ pipeline:
     pull: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    base: registry.cn-qingdao.aliyuncs.com/wod/alpine-arm64:3.9
+    base: registry.cn-qingdao.aliyuncs.com/wod/centos-arm64:7
     dockerfile: .beagle/dockerfile.arm
     repo: wod/awecloud-chartmuseum-arm64
     version: "v0.12.0"
@@ -46,4 +46,3 @@ pipeline:
         target: REGISTRY_USER
       - source: REGISTRY_PASSWORD_ALIYUN
         target: REGISTRY_PASSWORD     
-        
