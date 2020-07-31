@@ -3,7 +3,7 @@ ARG BASE
 FROM $BASE
 LABEL maintainer=mengkzhaoyun@gmail.com
 
-RUN apk add --no-cache cifs-utils ca-certificates \
+RUN yum install -y  cifs-utils ca-certificates \
     && adduser -D -u 1000 chartmuseum && pwd && find / -name 'chartmuseum'
 
 COPY ./dist/chartmuseum /chartmuseum
