@@ -10,7 +10,7 @@ LABEL maintainer=${AUTHOR} version=${VERSION}
 ARG TARGETOS
 ARG TARGETARCH
 
-COPY ./dist/chartm-$TARGETOS-$TARGETARCH /home/chart//chartm
+COPY ./dist/chartm-$TARGETOS-$TARGETARCH /home/chart/chartm
 COPY ./.beagle/docker-entrypoint.sh /home/chart/
 COPY ./.beagle/install_cert.sh /home/chart/
 
