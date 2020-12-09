@@ -11,13 +11,19 @@ clone:
 
 pipeline:
 
-  golang:
-    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go:1.14.6-alpine
+  patch:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go-arch:1.15.5-buster
     pull: true
+    dns: 223.5.5.5
+    commands:
+      - git apply .beagle/redis.patch || exit /b 1
+
+  golang:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go-arch:1.15.5-buster
     dns: 223.5.5.5
     volumes:
       - /data/cache/golang/mod:/go/pkg/mod
-    binary: chartmuseum
+    binary: chartm
     main: cmd/chartmuseum
 
   docker:
@@ -25,10 +31,11 @@ pipeline:
     pull: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    base: registry.cn-qingdao.aliyuncs.com/wod/alpine:3.12
+    base: registry.cn-qingdao.aliyuncs.com/wod/debian:buster-slim
     dockerfile: .beagle/dockerfile
-    repo: wod/awecloud-chartmuseum
-    version: "v0.12.0"
+    repo: wod/awecloud-harbor-chartmuseum
+    version: "v2.1.1"
+    args: "TARGETOS=linux,TARGETARCH=amd64"
     registry: registry.cn-qingdao.aliyuncs.com
     secrets: 
       - source: REGISTRY_USER_ALIYUN
@@ -36,15 +43,53 @@ pipeline:
       - source: REGISTRY_PASSWORD_ALIYUN
         target: REGISTRY_PASSWORD
 
-  harbor:
-    image: registry.cn-qingdao.aliyuncs.com/wod/devops-harbor:1.0
+  docker-arm64:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker:1.0
+    pull: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    repo: wod/awecloud-harbor-chartmuseum
-    tag: "v1.8.6"
+    base: registry.cn-qingdao.aliyuncs.com/wod/debian-arm64:buster-slim
+    dockerfile: .beagle/dockerfile
+    repo: wod/awecloud-harbor-chartmuseum-arm64
+    version: "v2.1.1"
+    args: "TARGETOS=linux,TARGETARCH=arm64"
     registry: registry.cn-qingdao.aliyuncs.com
     secrets: 
       - source: REGISTRY_USER_ALIYUN
         target: REGISTRY_USER
       - source: REGISTRY_PASSWORD_ALIYUN
-        target: REGISTRY_PASSWORD     
+        target: REGISTRY_PASSWORD
+
+  docker-ppc64le:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker:1.0
+    pull: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    base: registry.cn-qingdao.aliyuncs.com/wod/debian-ppc64le:buster-slim
+    dockerfile: .beagle/dockerfile
+    repo: wod/awecloud-harbor-chartmuseum-ppc64le
+    version: "v2.1.1"
+    args: "TARGETOS=linux,TARGETARCH=ppc64le"
+    registry: registry.cn-qingdao.aliyuncs.com
+    secrets: 
+      - source: REGISTRY_USER_ALIYUN
+        target: REGISTRY_USER
+      - source: REGISTRY_PASSWORD_ALIYUN
+        target: REGISTRY_PASSWORD
+
+  docker-mips64el:
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker:1.0
+    pull: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    base: registry.cn-qingdao.aliyuncs.com/wod/debian-mips64el:buster-slim
+    dockerfile: .beagle/dockerfile
+    repo: wod/awecloud-harbor-chartmuseum-mips64el
+    version: "v2.1.1"
+    args: "TARGETOS=linux,TARGETARCH=mips64le"
+    registry: registry.cn-qingdao.aliyuncs.com
+    secrets: 
+      - source: REGISTRY_USER_ALIYUN
+        target: REGISTRY_USER
+      - source: REGISTRY_PASSWORD_ALIYUN
+        target: REGISTRY_PASSWORD  

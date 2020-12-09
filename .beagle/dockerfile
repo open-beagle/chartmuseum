@@ -1,14 +1,33 @@
 ARG BASE
 
-FROM $BASE
-LABEL maintainer=mengkzhaoyun@gmail.com
+FROM ${BASE}
 
-RUN apk add --no-cache cifs-utils ca-certificates \
-    && adduser -D -u 1000 chartmuseum
+ARG AUTHOR
+ARG VERSION
 
-COPY dist/chartmuseum /chartmuseum
+LABEL maintainer=${AUTHOR} version=${VERSION}
+
+ARG TARGETOS
+ARG TARGETARCH
+
+COPY ./dist/chartm-$TARGETOS-$TARGETARCH /home/chart//chartm
+COPY ./.beagle/docker-entrypoint.sh /home/chart/
+COPY ./.beagle/install_cert.sh /home/chart/
+
+RUN groupadd -r -g 10000 chart && \
+useradd --no-log-init -m -g 10000 -u 10000 chart && \
+chown -R chart:chart /etc/ssl/certs && \
+chown -R chart:chart /home/chart && \
+chmod u+x /home/chart/chartm && \
+chmod u+x /home/chart/docker-entrypoint.sh && \
+chmod u+x /home/chart/install_cert.sh
+
+USER chart
+
+WORKDIR /home/chart
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
 
 VOLUME ["/chart_storage"]
-EXPOSE 9999
-USER 1000
-ENTRYPOINT ["/chartmuseum"]
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD curl -sS http://127.0.0.1:9999/health || curl -k -sS https://127.0.0.1:9443/health || exit 1
