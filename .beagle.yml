@@ -33,7 +33,7 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
     base: registry.cn-qingdao.aliyuncs.com/wod/debian:buster-slim
     dockerfile: .beagle/dockerfile
-    repo: wod/awecloud-harbor-chartmuseum
+    repo: wod/awecloud-chartmuseum
     version: "v2.1.1"
     args: "TARGETOS=linux,TARGETARCH=amd64"
     registry: registry.cn-qingdao.aliyuncs.com
@@ -50,7 +50,7 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
     base: registry.cn-qingdao.aliyuncs.com/wod/debian-arm64:buster-slim
     dockerfile: .beagle/dockerfile
-    repo: wod/awecloud-harbor-chartmuseum-arm64
+    repo: wod/awecloud-chartmuseum-arm64
     version: "v2.1.1"
     args: "TARGETOS=linux,TARGETARCH=arm64"
     registry: registry.cn-qingdao.aliyuncs.com
@@ -67,7 +67,7 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
     base: registry.cn-qingdao.aliyuncs.com/wod/debian-ppc64le:buster-slim
     dockerfile: .beagle/dockerfile
-    repo: wod/awecloud-harbor-chartmuseum-ppc64le
+    repo: wod/awecloud-chartmuseum-ppc64le
     version: "v2.1.1"
     args: "TARGETOS=linux,TARGETARCH=ppc64le"
     registry: registry.cn-qingdao.aliyuncs.com
@@ -84,7 +84,7 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
     base: registry.cn-qingdao.aliyuncs.com/wod/debian-mips64el:buster-slim
     dockerfile: .beagle/dockerfile
-    repo: wod/awecloud-harbor-chartmuseum-mips64el
+    repo: wod/awecloud-chartmuseum-mips64el
     version: "v2.1.1"
     args: "TARGETOS=linux,TARGETARCH=mips64le"
     registry: registry.cn-qingdao.aliyuncs.com
