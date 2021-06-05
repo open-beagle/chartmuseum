@@ -1,5 +1,7 @@
 # version
 
+/go/src/gitlab.wodcloud.com/cloud/awecloud-goharbor-harbor/Makefile
+
 ```bash
 git remote add upstream git@github.com:helm/chartmuseum.git
 
