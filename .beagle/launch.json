@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Go",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/cmd/chartmuseum/main.go",
+      "env": {
+        // "HTTP_PROXY": "http://192.168.1.11:8888",
+        "ALLOW_OVERWRITE": "true",
+        "AUTH_ANONYMOUS_GET": "true",
+        "BASIC_AUTH_USER": "chart_controller",
+        "CACHE": "redis",
+        "CACHE_REDIS_ADDR": "117.187.130.178:33089",
+        "CACHE_REDIS_DB": "3",
+        "CHART_POST_FORM_FIELD_NAME": "chart",
+        "CONTEXT_PATH": "",
+        "DEBUG": "false",
+        "DEPTH": "1",
+        "DISABLE_API": "false",
+        "DISABLE_METRICS": "false",
+        "DISABLE_STATEFILES": "false",
+        "INDEX_LIMIT": "0",
+        "LOG_JSON": "true",
+        "MAX_STORAGE_OBJECTS": "0",
+        "MAX_UPLOAD_SIZE": "20971520",
+        "PORT": "9999",
+        "PROV_POST_FORM_FIELD_NAME": "prov",
+        "READ_TIMEOUT": "3",
+        "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+        "STORAGE": "amazon",
+        "STORAGE_AMAZON_BUCKET": "registry",
+        "STORAGE_AMAZON_ENDPOINT": "https://minio.wodcloud.com",
+        "STORAGE_AMAZON_PREFIX": "/",
+        "STORAGE_AMAZON_REGION": "us-east-1",
+        "STORAGE_TIMESTAMP_TOLERANCE": "1s"
+      },
+      "showLog": true
+    }
+  ]
+}

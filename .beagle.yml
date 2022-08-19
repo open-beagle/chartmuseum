@@ -5,27 +5,41 @@ platform:
   runner: 10.11.92.40
 
 volumes:
-  - name: go
-    host:
-      path: /data/cache/golang/pkg/
   - name: docker
     host:
       path: /var/run/docker.sock
 
 workspace:
-  path: helm.sh/chartmuseum
+  path: /go/src/helm.sh/chartmuseum
+
+clone:
+  disable: true
 
 steps:
+  - name: fetch
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-git:1.0
+    network_mode: host
+
+  - name: s3-cache
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-s3-cache:1.0
+    network_mode: host
+    settings:
+      restore: true
+      mount:
+        - ./vendor
+      endpoint: http://cache.wodcloud.com
+      access_key:
+        from_secret: ACCESS_KEY_MINIO
+      secret_key:
+        from_secret: SECRET_KEY_MINIO
+
   - name: patch
-    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go-arch:1.17.3-bullseye
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go-arch:1.17-bullseye
     commands:
       - git apply .beagle/redis.patch || exit /b 1
 
   - name: golang
-    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go-arch:1.17.3-bullseye
-    volumes:
-      - name: go
-        path: /go/pkg
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-go-arch:1.17-bullseye
     settings:
       binary: chartm
       main: cmd/chartmuseum
@@ -103,7 +117,7 @@ steps:
         from_secret: REGISTRY_PASSWORD_ALIYUN
 
   - name: docker-arch
-    image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker-manifest:v1.2.3
+    image: registry.cn-qingdao.aliyuncs.com/wod/devops-docker-manifest:1.0
     volumes:
       - name: docker
         path: /var/run/docker.sock
@@ -129,3 +143,17 @@ name: REGISTRY_PASSWORD_ALIYUN
 get:
   path: devops-registry-aliyun
   name: PASSWORD
+
+---
+kind: secret
+name: ACCESS_KEY_MINIO
+get:
+  name: ACCESS_KEY
+  path: devops-minio
+
+---
+kind: secret
+name: SECRET_KEY_MINIO
+get:
+  name: SECRET_KEY
+  path: devops-minio
