@@ -74,6 +74,13 @@ func match(routes []*Route, method string, url string, contextPath string, depth
 			}
 		}
 	}
+	if checkStaticRoute(url) && method == http.MethodGet {
+		for _, route := range routes {
+			if checkStaticRoute(route.Path) {
+				return route, nil
+			}
+		}
+	}
 
 	isApiRoute := checkApiRoute(url)
 	if isApiRoute {
@@ -100,6 +107,9 @@ func match(routes []*Route, method string, url string, contextPath string, depth
 				break
 			}
 		}
+	}
+	if depth < 0 {
+		return nil, nil
 	}
 
 	if len(pathSplit) >= depth+startIndex {
@@ -150,6 +160,10 @@ func match(routes []*Route, method string, url string, contextPath string, depth
 	}
 
 	return nil, nil
+}
+
+func checkStaticRoute(url string) bool {
+	return strings.HasPrefix(url, "/static")
 }
 
 func checkApiRoute(url string) bool {

@@ -17,6 +17,7 @@ limitations under the License.
 package repo
 
 import (
+	"sync"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -49,6 +50,7 @@ type (
 		RepoName   string `json:"b"`
 		Raw        []byte `json:"c"`
 		ChartURL   string `json:"d"`
+		IndexLock sync.RWMutex
 	}
 )
 
@@ -58,7 +60,7 @@ func NewIndex(chartURL string, repo string, serverInfo *ServerInfo) *Index {
 		IndexFile:  &helm_repo.IndexFile{},
 		ServerInfo: serverInfo,
 	}
-	index := Index{indexFile, repo, []byte{}, chartURL}
+	index := Index{indexFile, repo, []byte{}, chartURL, sync.RWMutex{}}
 	index.Entries = map[string]helm_repo.ChartVersions{}
 	index.APIVersion = helm_repo.APIVersionV1
 	index.Regenerate()
@@ -73,6 +75,8 @@ func (index *Index) Regenerate() error {
 	if err != nil {
 		return err
 	}
+	index.IndexLock.Lock()
+	defer index.IndexLock.Unlock()
 	index.Raw = raw
 	index.updateMetrics()
 	return nil
@@ -98,6 +102,17 @@ func (index *Index) RemoveEntry(chartVersion *helm_repo.ChartVersion) {
 func (index *Index) AddEntry(chartVersion *helm_repo.ChartVersion) {
 	if _, ok := index.Entries[chartVersion.Name]; !ok {
 		index.Entries[chartVersion.Name] = helm_repo.ChartVersions{}
+	}
+	//
+	entries := index.Entries[chartVersion.Name]
+	l := len(entries)
+	for i := 1; i <= 5 && l-i >= 0; i++ {
+		cv := entries[l-i]
+		if cv.Version == chartVersion.Version {
+			index.setChartURL(chartVersion)
+			entries[l-i] = chartVersion
+			return
+		}
 	}
 	index.setChartURL(chartVersion)
 	index.Entries[chartVersion.Name] = append(index.Entries[chartVersion.Name], chartVersion)

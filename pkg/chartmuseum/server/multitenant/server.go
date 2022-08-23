@@ -19,17 +19,17 @@ package multitenant
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
+
+	cm_storage "github.com/chartmuseum/storage"
+	"github.com/gin-gonic/gin"
 
 	"helm.sh/chartmuseum/pkg/cache"
 	cm_logger "helm.sh/chartmuseum/pkg/chartmuseum/logger"
 	cm_router "helm.sh/chartmuseum/pkg/chartmuseum/router"
 	cm_repo "helm.sh/chartmuseum/pkg/repo"
-
-	"github.com/chartmuseum/storage"
-	cm_storage "github.com/chartmuseum/storage"
-	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -47,10 +47,10 @@ type (
 	MultiTenantServer struct {
 		Logger                 *cm_logger.Logger
 		Router                 *cm_router.Router
-		StorageBackend         storage.Backend
+		StorageBackend         cm_storage.Backend
 		TimestampTolerance     time.Duration
 		ExternalCacheStore     cache.Store
-		InternalCacheStore     map[string]*cacheEntry
+		InternalCacheStore     memoryCacheStore
 		MaxStorageObjects      int
 		IndexLimit             int
 		AllowOverwrite         bool
@@ -61,21 +61,35 @@ type (
 		ChartURL               string
 		ChartPostFormFieldName string
 		ProvPostFormFieldName  string
+		Version                string
 		Limiter                chan struct{}
 		Tenants                map[string]*tenantInternals
 		TenantCacheKeyLock     *sync.Mutex
+		CacheInterval          time.Duration
+		EventChan              chan event
+		ChartLimits            *ObjectsPerChartLimit
+		ArtifactHubRepoID      map[string]string
+		// Deprecated: see https://github.com/helm/chartmuseum/issues/485 for more info
+		EnforceSemver2  bool
+		WebTemplatePath string
+	}
+
+	ObjectsPerChartLimit struct {
+		*sync.Mutex
+		Limit int
 	}
 
 	// MultiTenantServerOptions are options for constructing a MultiTenantServer
 	MultiTenantServerOptions struct {
 		Logger                 *cm_logger.Logger
 		Router                 *cm_router.Router
-		StorageBackend         storage.Backend
+		StorageBackend         cm_storage.Backend
 		ExternalCacheStore     cache.Store
 		TimestampTolerance     time.Duration
 		ChartURL               string
 		ChartPostFormFieldName string
 		ProvPostFormFieldName  string
+		Version                string
 		MaxStorageObjects      int
 		IndexLimit             int
 		GenIndex               bool
@@ -84,11 +98,16 @@ type (
 		EnableAPI              bool
 		DisableDelete          bool
 		UseStatefiles          bool
+		CacheInterval          time.Duration
+		PerChartLimit          int
+		ArtifactHubRepoID      map[string]string
+		WebTemplatePath        string
+		// Deprecated: see https://github.com/helm/chartmuseum/issues/485 for more info
+		EnforceSemver2 bool
 	}
 
 	tenantInternals struct {
 		FetchedObjectsLock      *sync.Mutex
-		RegenerationLock        *sync.Mutex
 		FetchedObjectsChans     []chan fetchedObjects
 		RegeneratedIndexesChans []chan indexRegeneration
 	}
@@ -110,6 +129,13 @@ func NewMultiTenantServer(options MultiTenantServerOptions) (*MultiTenantServer,
 	if options.ChartURL != "" {
 		chartURL = options.ChartURL + options.Router.ContextPath
 	}
+	var l *ObjectsPerChartLimit
+	if options.PerChartLimit > 0 {
+		l = &ObjectsPerChartLimit{
+			Mutex: &sync.Mutex{},
+			Limit: options.PerChartLimit,
+		}
+	}
 
 	server := &MultiTenantServer{
 		Logger:                 options.Logger,
@@ -117,7 +143,7 @@ func NewMultiTenantServer(options MultiTenantServerOptions) (*MultiTenantServer,
 		StorageBackend:         options.StorageBackend,
 		TimestampTolerance:     options.TimestampTolerance,
 		ExternalCacheStore:     options.ExternalCacheStore,
-		InternalCacheStore:     map[string]*cacheEntry{},
+		InternalCacheStore:     memoryCacheStore{},
 		MaxStorageObjects:      options.MaxStorageObjects,
 		IndexLimit:             options.IndexLimit,
 		ChartURL:               chartURL,
@@ -128,9 +154,25 @@ func NewMultiTenantServer(options MultiTenantServerOptions) (*MultiTenantServer,
 		APIEnabled:             options.EnableAPI,
 		DisableDelete:          options.DisableDelete,
 		UseStatefiles:          options.UseStatefiles,
+		EnforceSemver2:         options.EnforceSemver2,
+		Version:                options.Version,
 		Limiter:                make(chan struct{}, options.IndexLimit),
 		Tenants:                map[string]*tenantInternals{},
 		TenantCacheKeyLock:     &sync.Mutex{},
+		CacheInterval:          options.CacheInterval,
+		ChartLimits:            l,
+		WebTemplatePath:        options.WebTemplatePath,
+		ArtifactHubRepoID:      options.ArtifactHubRepoID,
+	}
+
+	if server.WebTemplatePath != "" {
+		// check if template file exists to avoid panic when calling LoadHTMLGlob
+		templateFilesExist := server.CheckTemplateFilesExist(server.WebTemplatePath, server.Logger)
+		if templateFilesExist {
+			server.Router.LoadHTMLGlob(fmt.Sprintf("%s/*.html", server.WebTemplatePath))
+		} else {
+			server.Logger.Warnf("No template files found in %s", server.WebTemplatePath)
+		}
 	}
 
 	server.Router.SetRoutes(server.Routes())
@@ -139,6 +181,10 @@ func NewMultiTenantServer(options MultiTenantServerOptions) (*MultiTenantServer,
 	if options.GenIndex && server.Router.Depth == 0 {
 		server.genIndex()
 	}
+
+	server.EventChan = make(chan event, server.IndexLimit)
+	go server.startEventListener()
+	server.initCacheTimer()
 
 	return server, err
 }
@@ -156,4 +202,24 @@ func (server *MultiTenantServer) genIndex() {
 	}
 	echo(string(entry.RepoIndex.Raw[:]))
 	exit(0)
+}
+
+func (server *MultiTenantServer) CheckTemplateFilesExist(path string, logger *cm_logger.Logger) bool {
+	// check if template file exists
+	webTemplateFolder, err := os.Open(path)
+	if err != nil {
+		logger.Errorf("Failed to open template folder %s", path)
+		return false
+	}
+	templates, err := webTemplateFolder.Readdir(0)
+	if err != nil {
+		server.Logger.Errorf("Error reading template files from %s", path)
+		return false
+	}
+	for _, template := range templates {
+		if strings.HasSuffix(template.Name(), ".html") {
+			return true
+		}
+	}
+	return false
 }

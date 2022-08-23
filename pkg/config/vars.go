@@ -17,6 +17,8 @@ limitations under the License.
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli"
@@ -24,9 +26,10 @@ import (
 
 type (
 	configVar struct {
-		Type    configVarType
-		Default interface{}
-		CLIFlag cli.Flag
+		Type       configVarType
+		Default    interface{}
+		CLIFlag    cli.Flag
+		Deprecated bool
 	}
 
 	configVarType string
@@ -40,6 +43,7 @@ var (
 	intType      configVarType = "int"
 	boolType     configVarType = "bool"
 	durationType configVarType = "time.Duration"
+	keyValueType configVarType = "keyValue"
 )
 
 var configVars = map[string]configVar{
@@ -79,13 +83,32 @@ var configVars = map[string]configVar{
 			EnvVar: "LOG_HEALTH",
 		},
 	},
+	"loglatencyinteger": {
+		Type:    boolType,
+		Default: false,
+		CLIFlag: cli.BoolFlag{
+			Name:   "log-latency-integer",
+			Usage:  "log latency as an integer (nanoseconds) instead of a string",
+			EnvVar: "LOG_LATENCY_INTEGER",
+		},
+	},
 	"disablemetrics": {
 		Type:    boolType,
 		Default: false,
 		CLIFlag: cli.BoolFlag{
 			Name:   "disable-metrics",
-			Usage:  "disable Prometheus metrics",
+			Usage:  "(deprecated) disable Prometheus metrics",
 			EnvVar: "DISABLE_METRICS",
+		},
+		Deprecated: true,
+	},
+	"enablemetrics": {
+		Type:    boolType,
+		Default: false,
+		CLIFlag: cli.BoolFlag{
+			Name:   "enable-metrics",
+			Usage:  "enable Prometheus metrics",
+			EnvVar: "ENABLE_METRICS",
 		},
 	},
 	"disableapi": {
@@ -97,7 +120,7 @@ var configVars = map[string]configVar{
 			EnvVar: "DISABLE_API",
 		},
 	},
-	"disabldelete": {
+	"disabledelete": {
 		Type:    boolType,
 		Default: false,
 		CLIFlag: cli.BoolFlag{
@@ -476,6 +499,15 @@ var configVars = map[string]configVar{
 			EnvVar: "STORAGE_OPENSTACK_CACERT",
 		},
 	},
+	"storage.openstack.auth": {
+		Type:    stringType,
+		Default: "auto",
+		CLIFlag: cli.StringFlag{
+			Name:   "storage-openstack-auth",
+			Usage:  "the OpenStack auth protocol to use. Set \"v1\" for v1 or \"auto\" for v2 and v3",
+			EnvVar: "STORAGE_OPENSTACK_AUTH",
+		},
+	},
 	"storage.baidu.prefix": {
 		Type:    stringType,
 		Default: "",
@@ -703,6 +735,15 @@ var configVars = map[string]configVar{
 			EnvVar: "AUTH_CERT_PATH",
 		},
 	},
+	"authactionssearchpath": {
+		Type:    stringType,
+		Default: "",
+		CLIFlag: cli.StringFlag{
+			Name:   "auth-actions-search-path",
+			Usage:  "JMESPath to find allowed actions in a jwt token",
+			EnvVar: "AUTH_ACTIONS_SEARCH_PATH",
+		},
+	},
 	"depthdynamic": {
 		Type:    boolType,
 		Default: false,
@@ -721,6 +762,87 @@ var configVars = map[string]configVar{
 			EnvVar: "CORS_ALLOW_ORIGIN",
 		},
 	},
+	"enforce-semver2": {
+		Type:    boolType,
+		Default: false,
+		CLIFlag: cli.BoolFlag{
+			Name:   "enforce-semver2",
+			Usage:  "(deprecated) enforce the chart museum server only accepts the valid chart version as Helm does",
+			EnvVar: "ENFORCE_SEMVER2",
+		},
+		Deprecated: true,
+	},
+	"cacheinterval": {
+		Type:    durationType,
+		Default: time.Duration(0),
+		CLIFlag: cli.DurationFlag{
+			Name:   "cache-interval",
+			Usage:  "set the interval of delta updating the cache",
+			EnvVar: "CACHE_INTERVAL",
+		},
+	},
+	"listen.host": {
+		Type:    stringType,
+		Default: "0.0.0.0",
+		CLIFlag: cli.StringFlag{
+			Name:   "listen-host",
+			Usage:  "specifies the host to listen on",
+			EnvVar: "LISTEN_HOST",
+		},
+	},
+	"per-chart-limit": {
+		Type:    intType,
+		Default: 0,
+		CLIFlag: cli.IntFlag{
+			Name:   "per-chart-limit",
+			Usage:  "limits the museum server stores the max N versions per chart",
+			EnvVar: "PER_CHART_LIMIT",
+		},
+	},
+	"web-template-path": {
+		Type:    stringType,
+		Default: "",
+		CLIFlag: cli.StringFlag{
+			Name:   "web-template-path",
+			Usage:  "path to the folder, which contains the custom welcome page",
+			EnvVar: "WEB_TEMPLATE_PATH",
+		},
+	},
+	"artifact-hub-repo-id": {
+		Type: keyValueType,
+		CLIFlag: cli.GenericFlag{
+			Name:  "artifact-hub-repo-id",
+			Value: &KeyValueFlag{},
+			Usage: "the artifact hub repositoryID used to populate a artifacthub-repo.yml file. " +
+				"This can be a single repository ID for depth=0 servers or a key value pair for depth=N servers (i.e org1/repo1=foo).",
+			EnvVar: "ARTIFACT_HUB_REPO_ID",
+		},
+	},
+}
+
+type KeyValueFlag struct {
+	m map[string]string
+}
+
+func (k *KeyValueFlag) Set(value string) error {
+	if k.m == nil {
+		k.m = make(map[string]string)
+	}
+	parts := strings.SplitN(value, "=", 2)
+	if len(parts) == 1 { // depth=0 case
+		k.m[""] = parts[0]
+	} else if len(parts) == 2 {
+		k.m[parts[0]] = parts[1]
+	}
+	return nil
+}
+
+func (k *KeyValueFlag) String() string {
+	var str []string
+	for key, val := range k.m {
+		str = append(str, fmt.Sprintf("%s=%s", key, val))
+	}
+	return strings.Join(str, ",")
 }
 
 func populateCLIFlags() {

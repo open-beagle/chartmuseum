@@ -1,1 +1,7 @@
-vendor
+# Don't bring in anything into the build context
+
+-
+
+# Bring in our binary
+
+!\_dist/linux-\*

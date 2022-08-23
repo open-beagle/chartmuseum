@@ -49,31 +49,36 @@ type (
 		CORSAllowOrigin string
 		ReadTimeout     time.Duration
 		WriteTimeout    time.Duration
+		Host            string
+		WebTemplatePath string
 	}
 
 	// RouterOptions are options for constructing a Router
 	RouterOptions struct {
-		Logger          *cm_logger.Logger
-		Username        string
-		Password        string
-		ContextPath     string
-		TlsCert         string
-		TlsKey          string
-		TlsCACert       string
-		PathPrefix      string
-		LogHealth       bool
-		EnableMetrics   bool
-		AnonymousGet    bool
-		Depth           int
-		MaxUploadSize   int
-		BearerAuth      bool
-		AuthRealm       string
-		AuthService     string
-		AuthCertPath    string
-		DepthDynamic    bool
-		ReadTimeout     int
-		WriteTimeout    int
-		CORSAllowOrigin string
+		Logger                *cm_logger.Logger
+		LogLatencyInteger     bool
+		Username              string
+		Password              string
+		ContextPath           string
+		TlsCert               string
+		TlsKey                string
+		TlsCACert             string
+		PathPrefix            string
+		LogHealth             bool
+		EnableMetrics         bool
+		AnonymousGet          bool
+		Depth                 int
+		MaxUploadSize         int
+		BearerAuth            bool
+		AuthRealm             string
+		AuthService           string
+		AuthCertPath          string
+		AuthActionsSearchPath string
+		DepthDynamic          bool
+		ReadTimeout           int
+		WriteTimeout          int
+		CORSAllowOrigin       string
+		Host                  string
 	}
 
 	// Route represents an application route
@@ -89,8 +94,9 @@ type (
 func NewRouter(options RouterOptions) *Router {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
+	engine.RedirectTrailingSlash = false // This was causing /health to 301 to /health/
 	engine.Use(gin.Recovery())
-	engine.Use(requestWrapper(options.Logger, options.LogHealth))
+	engine.Use(requestWrapper(options.Logger, options.LogHealth, options.LogLatencyInteger))
 	engine.Use(limits.RequestSizeLimiter(int64(options.MaxUploadSize)))
 
 	if options.EnableMetrics {
@@ -112,6 +118,7 @@ func NewRouter(options RouterOptions) *Router {
 		CORSAllowOrigin: options.CORSAllowOrigin,
 		ReadTimeout:     time.Duration(options.ReadTimeout) * time.Second,
 		WriteTimeout:    time.Duration(options.WriteTimeout) * time.Second,
+		Host:            options.Host,
 	}
 
 	var err error
@@ -135,9 +142,10 @@ func NewRouter(options RouterOptions) *Router {
 		}
 
 		authorizer, err = cm_auth.NewAuthorizer(&cm_auth.AuthorizerOptions{
-			Realm:         options.AuthRealm,
-			Service:       options.AuthService,
-			PublicKeyPath: options.AuthCertPath,
+			Realm:                    options.AuthRealm,
+			Service:                  options.AuthService,
+			PublicKeyPath:            options.AuthCertPath,
+			AllowedActionsSearchPath: options.AuthActionsSearchPath,
 		})
 	} else if options.Username != "" && options.Password != "" {
 		authorizer, err = cm_auth.NewAuthorizer(&cm_auth.AuthorizerOptions{
@@ -157,18 +165,18 @@ func NewRouter(options RouterOptions) *Router {
 
 	router.Authorizer = authorizer
 
-	router.NoRoute(router.masterHandler)
+	router.NoRoute(router.rootHandler)
 
 	return router
 }
 
 func (router *Router) Start(port int) {
 	router.Logger.Infow("Starting ChartMuseum",
-		"port", port,
+		"host", router.Host, "port", port,
 	)
 
 	server := http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
+		Addr:         fmt.Sprintf("%s:%d", router.Host, port),
 		Handler:      router,
 		ReadTimeout:  router.ReadTimeout,
 		WriteTimeout: router.WriteTimeout,
@@ -202,7 +210,7 @@ func (router *Router) SetRoutes(routes []*Route) {
 }
 
 // all incoming requests are passed through this handler
-func (router *Router) masterHandler(c *gin.Context) {
+func (router *Router) rootHandler(c *gin.Context) {
 	route, params := match(router.Routes, c.Request.Method, c.Request.URL.Path, router.ContextPath, router.Depth,
 		router.DepthDynamic)
 	if route == nil {

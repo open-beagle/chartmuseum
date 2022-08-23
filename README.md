@@ -1,17 +1,17 @@
 # ChartMuseum
 
-[![Codefresh build status](https://g.codefresh.io/api/badges/pipeline/chartmuseum/helm%2Fchartmuseum%2Fmaster?type=cf-1)](https://g.codefresh.io/public/accounts/chartmuseum/pipelines/helm/chartmuseum/master)
+[![GitHub Actions status](https://github.com/helm/chartmuseum/workflows/build/badge.svg)](https://github.com/helm/chartmuseum/actions?query=workflow%3Abuild)
 [![Go Report Card](https://goreportcard.com/badge/github.com/helm/chartmuseum)](https://goreportcard.com/report/github.com/helm/chartmuseum)
 [![GoDoc](https://godoc.org/github.com/helm/chartmuseum?status.svg)](https://godoc.org/github.com/helm/chartmuseum)
 
 <p align="center"><img align="center" src="logo2.png"></p><br/>
 
-*ChartMuseum* is an open-source **[Helm Chart Repository](https://github.com/helm/helm-www/blob/master/content/docs/topics/chart_repository.md)** server written in Go (Golang), with support for cloud storage backends, including [Google Cloud Storage](https://cloud.google.com/storage/), [Amazon S3](https://aws.amazon.com/s3/), [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs/), [Alibaba Cloud OSS Storage](https://www.alibabacloud.com/product/oss), [Openstack Object Storage](https://developer.openstack.org/api-ref/object-store/), [Oracle Cloud Infrastructure Object Storage](https://cloud.oracle.com/storage), [Baidu Cloud BOS Storage](https://cloud.baidu.com/product/bos.html), [Tencent Cloud Object Storage](https://intl.cloud.tencent.com/product/cos), [Netease Cloud NOS Storage](https://www.163yun.com/product/nos), [DigitalOcean Spaces](https://www.digitalocean.com/products/spaces/), [Minio](https://min.io/), and [etcd](https://etcd.io/).
+*ChartMuseum* is an open-source **[Helm Chart Repository](https://helm.sh/docs/topics/chart_repository/)** server written in Go (Golang), with support for cloud storage backends, including [Google Cloud Storage](https://cloud.google.com/storage/), [Amazon S3](https://aws.amazon.com/s3/), [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs/), [Alibaba Cloud OSS Storage](https://www.alibabacloud.com/product/oss), [Openstack Object Storage](https://developer.openstack.org/api-ref/object-store/), [Oracle Cloud Infrastructure Object Storage](https://cloud.oracle.com/storage), [Baidu Cloud BOS Storage](https://cloud.baidu.com/product/bos.html), [Tencent Cloud Object Storage](https://intl.cloud.tencent.com/product/cos), [Netease Cloud NOS Storage](https://www.163yun.com/product/nos), [DigitalOcean Spaces](https://www.digitalocean.com/products/spaces/), [Minio](https://min.io/), and [etcd](https://etcd.io/).
 
 Works as a valid Helm Chart Repository, and also provides an API for uploading charts.
 
-<img width="120" align="right" src="https://github.com/golang-samples/gopher-vector/raw/master/gopher-side_color.png">
-<img width="40" align="right" src="https://github.com/golang-samples/gopher-vector/raw/master/gopher-side_color.png">
+<img width="120" align="right" src="https://github.com/redblue9771/gopher-vector/raw/master/gopher-side_color.png">
+<img width="40" align="right" src="https://github.com/redblue9771/gopher-vector/raw/master/gopher-side_color.png">
 
 Powered by some great Go technology:
 - [helm/helm](https://github.com/helm/helm) - for working with charts
@@ -36,11 +36,14 @@ Powered by some great Go technology:
 - `GET /api/charts` - list all charts
 - `GET /api/charts/<name>` - list all versions of a chart
 - `GET /api/charts/<name>/<version>` - describe a chart version
+- `GET /api/charts/<name>/<version>/templates` - get chart template
+- `GET /api/charts/<name>/<version>/values` - get chart values
 - `HEAD /api/charts/<name>` - check if chart exists (any versions)
 - `HEAD /api/charts/<name>/<version>` - check if chart version exists
 
 ### Server Info
 - `GET /` - HTML welcome page
+- `GET /info` - returns current ChartMuseum version
 - `GET /health` - returns 200 OK
 
 ## Uploading a Chart Package
@@ -57,7 +60,7 @@ Upload `mychart-0.1.0.tgz`:
 curl --data-binary "@mychart-0.1.0.tgz" http://localhost:8080/api/charts
 ```
 
-If you've signed your package and generated a [provenance file](https://github.com/helm/helm/blob/master/docs/provenance.md), upload it with:
+If you've signed your package and generated a [provenance file](https://github.com/helm/helm-www/blob/master/content/en/docs/topics/provenance.md), upload it with:
 ```bash
 curl --data-binary "@mychart-0.1.0.tgz.prov" http://localhost:8080/api/prov
 ```
@@ -70,7 +73,7 @@ curl -F "chart=@mychart-0.1.0.tgz" -F "prov=@mychart-0.1.0.tgz.prov" http://loca
 
 You can also use the [helm-push plugin](https://github.com/chartmuseum/helm-push):
 ```
-helm push mychart/ chartmuseum
+helm cm-push mychart/ chartmuseum
 ```
 
 ## Installing Charts into Kubernetes
@@ -81,12 +84,12 @@ helm repo add chartmuseum http://localhost:8080
 
 Search for charts:
 ```bash
-helm search chartmuseum/
+helm search repo chartmuseum/
 ```
 
 Install chart:
 ```bash
-helm install chartmuseum/mychart
+helm install chartmuseum/mychart --generate-name
 ```
 
 ## How to Run
@@ -96,26 +99,16 @@ Install binary using [GoFish](https://gofi.sh/):
 ```
 gofish install chartmuseum
 ==> Installing chartmuseum...
-🐠  chartmuseum 0.12.0: installed in 95.431145ms
+🐠  chartmuseum 0.15.0: installed in 95.431145ms
 ```
 
-or manually:
-```bash
-# on Linux
-curl -LO https://s3.amazonaws.com/chartmuseum/release/latest/bin/linux/amd64/chartmuseum
-
-# on macOS
-curl -LO https://s3.amazonaws.com/chartmuseum/release/latest/bin/darwin/amd64/chartmuseum
-
-# on Windows
-curl -LO https://s3.amazonaws.com/chartmuseum/release/latest/bin/windows/amd64/chartmuseum
-
-chmod +x ./chartmuseum
-mv ./chartmuseum /usr/local/bin
+or you can use the installer script:
 ```
-Using `latest` in URLs above will get the latest binary (built from master branch).
+curl https://raw.githubusercontent.com/helm/chartmuseum/main/scripts/get-chartmuseum | bash
+```
 
-Replace `latest` with `$(curl -s https://s3.amazonaws.com/chartmuseum/release/stable.txt)` to automatically determine the latest stable release (e.g. `v0.12.0`). The stable checksums can be found [here](https://github.com/fishworks/fish-food/blob/master/Food/chartmuseum.lua).
+or download manually from the [releases page](https://github.com/helm/chartmuseum/releases),
+which also contains all package checksums and signatures.
 
 Determine your version with `chartmuseum --version`.
 
@@ -126,9 +119,13 @@ All command-line options can be specified as environment variables, which are de
 
 For example, the env var `STORAGE_AMAZON_BUCKET` can be used in place of `--storage-amazon-bucket`.
 
-##### Using config yaml file example
-When using a yaml file instead of the command line， Convert the `-` of the parameter in the command to `.`.
-Note that `--storage` is converted to `storage.backend`
+##### Using a configuration file
+Use `chartmuseum --config config.yaml` to read configuration from a file.
+
+When using file-based configuration, the corresponding option name can be looked up in [`pkg/config/vars.go`]( https://github.com/helm/chartmuseum/blob/main/pkg/config/vars.go). It would be the key of `configVars` entry corresponding to the command line option / environment variable. For example, `--storage` corresponds to `storage.backend` in the configuration file.
+
+Here's a complete example of a `config.yaml`:
+
 ```yaml
 debug: true
 port: 8080
@@ -137,9 +134,9 @@ storage.local.rootdir: <storage_path>
 bearerauth: 1
 authrealm: <authorization server url>
 authservice: <authorization server service name>
-authcertpath: <path to authorization server public pem file> 
+authcertpath: <path to authorization server public pem file>
+authactionssearchpath: <optional: JMESPath to find allowed actions in a jwt token>
 depth: 2
-
 ```
 
 #### Using with Amazon S3 or Compatible services like Minio or DigitalOcean.
@@ -197,7 +194,7 @@ You need at least the following permissions inside your IAM Policy
 In order to work with AWS service accounts you may need to set `AWS_SDK_LOAD_CONFIG=1` in your environment.
 For more context, please see [here](https://github.com/helm/chartmuseum/issues/280#issuecomment-592292527).
 
-For DigitalOcean, set the credentials using environment variable and pass the `endpoint`.  
+For DigitalOcean, set the credentials using environment variable and pass the `endpoint`.
 Note below, that the region `us-east-1` needs to be set, since that is how the DigitalOcean cli implementation functions. The actual region of your spaces location is defined by the endpoint. Below we are using Frankfurt as an example.
 ```bash
 export AWS_ACCESS_KEY_ID="spaces_access_key"
@@ -284,6 +281,20 @@ chartmuseum --debug --port=8080 \
   --storage-openstack-prefix="" \
   --storage-openstack-region="myregion"
 ```
+
+For Swift V1 Auth you must set the following env vars:
+- `ST_AUTH`
+- `ST_USER`
+- `ST_KEY`
+
+```bash
+chartmuseum --debug --port=8080 \
+  --storage="openstack" \
+  --storage-openstack-auth="v1" \
+  --storage-openstack-container="mycontainer" \
+  --storage-openstack-prefix=""
+```
+
 
 #### Using with Oracle Cloud Infrastructure Object Storage
 
@@ -386,8 +397,11 @@ If all of the following options are provided, bearer auth will protect all route
 - `--auth-realm=<realm>` - authorization server url
 - `--auth-service=<service>` - authorization server service name
 - `--auth-cert-path=<path>` - path to authorization server public pem file
+- `--auth-actions-search-path=<JMESPath>` - (optional) JMESPath to find allowed actions in a jwt token
 
 Using options above, *ChartMuseum* is configured with a public key, and will accept RS256 JWT tokens signed by the associated private key, passed in the `Authorization` header. You can use the [chartmuseum/auth](https://github.com/chartmuseum/auth) Go library to generate valid JWT tokens.
+
+##### JWT Token without a custom JMESPath to find actions
 
 In order to gain access to a specific resource, the JWT token must contain an `access` section in the claims. This section indicates which resources the user is able to access. Here is an example token payload:
 
@@ -409,6 +423,13 @@ In order to gain access to a specific resource, the JWT token must contain an `a
 
 The `type` is always "artifact-repository", the `name` is the namespace/tenant (just use the string "repo" if using single-tenant server), and `actions` is an array of actions the user can perform ("pull" and/or "push).
 
+If your JWT token structure is different, you can configure a [JMESPath string](https://jmespath.org/). So you can define the way to find the allowed actions yourself.
+For the `type` and the the `name` you can use following placeholder
+* name: `$NAMESPACE`
+* type: `$ACCESS_ENTRY_TYPE`
+
+E.g.: If you want to represent the default configuration, the JMESPath looks like: `access[?name=='$NAMESPACE' && type=='$ACCESS_ENTRY_TYPE'].actions[]`.
+
 For more information about how this works, please see [chartmuseum/auth-server-example](https://github.com/chartmuseum/auth-server-example).
 
 
@@ -429,8 +450,9 @@ The contents of index.yaml will be printed to stdout and the program will exit. 
 #### Other CLI options
 - `--log-json` - output structured logs as json
 - `--log-health` - log incoming /health requests
+- `--log-latency-integer` - log latency as an integer (nanoseconds) instead of a string
 - `--disable-api` - disable all routes prefixed with /api
-- `--disable-delete` - explicitely disable the delete chart route
+- `--disable-delete` - explicitly disable the delete chart route
 - `--disable-statefiles` - disable use of index-cache.yaml
 - `--allow-overwrite` - allow chart versions to be re-uploaded without ?force querystring
 - `--disable-force-overwrite` - do not allow chart versions to be re-uploaded, even with ?force querystring
@@ -448,7 +470,7 @@ The contents of index.yaml will be printed to stdout and the program will exit. 
 - `--write-timeout=<number>` - socker write timeout for http server
 
 ### Docker Image
-Available via [Docker Hub](https://hub.docker.com/r/chartmuseum/chartmuseum/).
+Available via [GitHub Container Registry (GHCR)](https://github.com/orgs/helm/packages/container/package/chartmuseum).
 
 Example usage (local storage):
 ```bash
@@ -458,7 +480,7 @@ docker run --rm -it \
   -e STORAGE=local \
   -e STORAGE_LOCAL_ROOTDIR=/charts \
   -v $(pwd)/charts:/charts \
-  chartmuseum/chartmuseum:latest
+  ghcr.io/helm/chartmuseum:v0.15.0
 ```
 
 Example usage (S3):
@@ -471,21 +493,21 @@ docker run --rm -it \
   -e STORAGE_AMAZON_PREFIX="" \
   -e STORAGE_AMAZON_REGION="us-east-1" \
   -v ~/.aws:/home/chartmuseum/.aws:ro \
-  chartmuseum/chartmuseum:latest
+  ghcr.io/helm/chartmuseum:v0.15.0
 ```
 
 ### Helm Chart
-There is a [Helm chart for *ChartMuseum*](https://github.com/helm/charts/tree/master/stable/chartmuseum) itself which can be found in the official Helm charts repository.
+There is a [Helm chart for *ChartMuseum*](https://github.com/chartmuseum/charts/tree/main/src/chartmuseum) itself.
 
-You can also view it on [Helm Hub](https://hub.helm.sh/charts/stable/chartmuseum).
+You can also view it on [Artifact Hub](https://artifacthub.io/packages/helm/chartmuseum/chartmuseum).
 
 To install:
 ```bash
-helm repo add stable https://kubernetes-charts.storage.googleapis.com
-helm install stable/chartmuseum
+helm repo add chartmuseum https://chartmuseum.github.io/charts
+helm install chartmuseum/chartmuseum
 ```
 
-If interested in making changes, please submit a PR to [helm/charts](https://github.com/helm/charts). Before doing any work, please check for any [currently open pull requests](https://github.com/helm/charts/pulls?q=is%3Apr+is%3Aopen+chartmuseum). Thanks!
+If interested in making changes, please submit a PR to [chartmuseum/charts](https://github.com/chartmuseum/charts). Before doing any work, please check for any [currently open pull requests](https://github.com/chartmuseum/charts/pulls?q=is%3Apr+is%3Aopen). Thanks!
 
 ## Multitenancy
 Multitenancy is supported with the `--depth` flag.
@@ -524,7 +546,7 @@ You may also experiment with the `--depth-dynamic` flag, which should allow for 
 
 ## Pagination
 
-For large chart repositories, you may wish to paginate the results from the `GET /api/charts` route. 
+For large chart repositories, you may wish to paginate the results from the `GET /api/charts` route.
 
 To do so, add the `offset` and `limit` query params to the request. For example, to retrieve a list of 5 charts total, skipping the first 5 charts, you could use the following:
 
@@ -537,6 +559,17 @@ GET /api/charts?offset=5&limit=5
 By default, the contents of `index.yaml` (per-tenant) will be stored in memory. This means that memory usage will continue to grow indefinitely as more charts are added to storage.
 
 You may wish to offload this to an external cache store, especially for large, multitenant installations.
+
+### Cache Interval
+
+When dealing with thousands of charts, you may experience latency with the default settings. This is because upon each request, the storage backend is scanned for changes compared to the cache.
+
+If you are ok with `index.yaml` being out-of-date for a fixed period of time, you can improve performance by using the `--cache-interval=<interval>` option.
+When this setting is enabled, the charts available for each tenant are refreshed on a timer.
+
+For example, to only check storage every 5 minutes, you can use `--cache-interval=5m`.
+
+For valid values to use for this setting, please see [here](https://godoc.org/time#ParseDuration).
 
 ### Using Redis
 
@@ -554,9 +587,9 @@ chartmuseum --debug --port=8080 \
 
 ## Prometheus Metrics
 
-ChartMuseum exposes its [Prometheus metrics](https://prometheus.io/docs/concepts/metric_types/) at the `/metrics` route on the main port. This can be disabled with the `--disable-metrics` command-line flag or the `DISABLE_METRICS` environment variable.
+ChartMuseum exposes its [Prometheus metrics](https://prometheus.io/docs/concepts/metric_types/) at the `/metrics` route on the main port. This can be enabled with the `--enable-metrics` command-line flag or the `ENABLE_METRICS` environment variable.
 
-> Note that the Kubernetes chart currently disables metrics by default (`DISABLE_METRICS=true` is set in the chart).
+> Note that the Kubernetes chart currently disables metrics by default (`ENABLE_METRICS=false` is set in the chart). The `--disable-metrics` command-line flag has be deprecated and will only be available in `v0.14.0` and prior.
 
 Below are the current application metrics exposed. Note that there is a per tenant (repo) label. The repo label corresponds to the depth parameter, so a depth=2 as the example above would
 have repo labels named `org1/repoa` and `org2/repob`.
@@ -564,7 +597,7 @@ have repo labels named `org1/repoa` and `org2/repob`.
 | Metric                                   | Type  | Labels     | Description                              |
 | ---------------------------------------- | ----- | ---------- | ---------------------------------------- |
 | chartmuseum_charts_served_total          | Gauge | {repo="*"} | Total number of charts                   |
-| chartmuseum_charts_versions_served_total | Gauge | {repo="*"} | Total number of chart versions available |
+| chartmuseum_chart_versions_served_total | Gauge | {repo="*"} | Total number of chart versions available |
 
 *: see above for repo label
 
@@ -598,13 +631,51 @@ The `--gen-index` CLI option (described above) can be used to generate and print
 Upon index regeneration, *ChartMuseum* will, however, save a statefile in storage called `index-cache.yaml` used for cache optimization. This file is only meant for internal use, but may be able to be used for migration to simple storage.
 
 ## Mirroring the official Kubernetes repositories
-Please see `scripts/mirror_k8s_repos.sh` for an example of how to download all .tgz packages from the official Kubernetes repositories (both stable and incubator).
+Please see `scripts/mirror-k8s-repos.sh` for an example of how to download all .tgz packages from the official Kubernetes repositories (both stable and incubator).
 
 You can then use *ChartMuseum* to serve up an internal mirror:
 ```
-scripts/mirror_k8s_repos.sh
+scripts/mirror-k8s-repos.sh
 chartmuseum --debug --port=8080 --storage="local" --storage-local-rootdir="./mirror"
  ```
+
+## Custom Welcome Page
+
+With the flag `--web-template-path=<path>`, you can specify the path to your custom welcome page.
+
+The structure of the folder should be like this:
+
+```bash
+web/
+  index.html
+  xyz.html
+  static/
+      main.css
+      main.js
+```
+
+> ChartMuseum is using gin-gonic to serve the static files, this means that you can use go-template to render the files.
+
+If you don't specify a custom welcome page, ChartMuseum will serve the default one.
+
+#### Artifact Hub
+
+By setting the flag `--artifact-hub-repo-id <repo id>`, ChartMuseum will serve a `artifacthub-repo.yml` file with the
+specified repo ID in the `repositoryID` field of the yaml file.
+
+```yaml
+repositoryID: The ID of the Artifact Hub repository where the packages will be published to (optional, but it enables verified publisher)
+```
+
+##### Multitenancy
+
+For multitenancy setups, you can provide a key value pair to the flag in the format: `--artifact-hub-repo-id <repo>=<repo id>`
+
+```bash
+chartmuseum --storage local --storage-local-rootdir /tmp/ --depth 1 --artifact-hub-repo-id org1=<repo id> --artifact-hub-repo-id org2=<repo2 id>
+```
+
+The `artifacthub-repo.yml` file will then be served at `/org1/artifacthub-repo.yml` and `/org2/artifacthub-repo.yml`
 
 ## Original Logo
 

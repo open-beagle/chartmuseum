@@ -35,15 +35,17 @@ import (
 	"helm.sh/chartmuseum/pkg/repo"
 
 	"github.com/chartmuseum/storage"
+	"github.com/ghodss/yaml"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/suite"
 )
 
 var maxUploadSize = 1024 * 1024 * 20
 
-// These are generated from scripts/setup_test_environment.sh
+// These are generated from scripts/setup-test-environment.sh
 var testTarballPath = "../../../../testdata/charts/mychart/mychart-0.1.0.tgz"
 var testTarballPathV2 = "../../../../testdata/charts/mychart/mychart-0.2.0.tgz"
+var testTarballPathV0 = "../../../../testdata/charts/mychart/mychart-0.0.1.tgz"
 var testProvfilePath = "../../../../testdata/charts/mychart/mychart-0.1.0.tgz.prov"
 var otherTestTarballPath = "../../../../testdata/charts/otherchart/otherchart-0.1.0.tgz"
 var otherTestProvfilePath = "../../../../testdata/charts/otherchart/otherchart-0.1.0.tgz.prov"
@@ -52,24 +54,28 @@ var badTestProvfilePath = "../../../../testdata/badcharts/mybadchart/mybadchart-
 
 type MultiTenantServerTestSuite struct {
 	suite.Suite
-	Depth0Server         *MultiTenantServer
-	Depth1Server         *MultiTenantServer
-	Depth2Server         *MultiTenantServer
-	Depth3Server         *MultiTenantServer
-	DisabledAPIServer    *MultiTenantServer
-	DisabledDeleteServer *MultiTenantServer
-	OverwriteServer      *MultiTenantServer
-	ForceOverwriteServer *MultiTenantServer
-	ChartURLServer       *MultiTenantServer
-	MaxObjectsServer     *MultiTenantServer
-	MaxUploadSizeServer  *MultiTenantServer
-	TempDirectory        string
-	TestTarballFilename  string
-	TestProvfileFilename string
-	StorageDirectory     map[string]map[string][]string
-	LastCrashMessage     string
-	LastPrinted          string
-	LastExitCode         int
+	Depth0Server            *MultiTenantServer
+	Depth1Server            *MultiTenantServer
+	Depth2Server            *MultiTenantServer
+	Depth3Server            *MultiTenantServer
+	DisabledAPIServer       *MultiTenantServer
+	DisabledDeleteServer    *MultiTenantServer
+	OverwriteServer         *MultiTenantServer
+	ForceOverwriteServer    *MultiTenantServer
+	ChartURLServer          *MultiTenantServer
+	MaxObjectsServer        *MultiTenantServer
+	MaxUploadSizeServer     *MultiTenantServer
+	Semver2Server           *MultiTenantServer
+	PerChartLimitServer     *MultiTenantServer
+	ArtifactHubRepoIDServer *MultiTenantServer
+	TempDirectory           string
+	TestTarballFilename     string
+	TestProvfileFilename    string
+	StorageDirectory        map[string]map[string][]string
+	LastCrashMessage        string
+	LastPrinted             string
+	LastExitCode            int
+	ArtifactHubIds          map[string]string
 }
 
 func (suite *MultiTenantServerTestSuite) doRequest(stype string, method string, urlStr string, body io.Reader, contentType string, output ...*bytes.Buffer) gin.ResponseWriter {
@@ -106,6 +112,12 @@ func (suite *MultiTenantServerTestSuite) doRequest(stype string, method string, 
 		suite.MaxObjectsServer.Router.HandleContext(c)
 	case "maxuploadsize":
 		suite.MaxUploadSizeServer.Router.HandleContext(c)
+	case "semver2":
+		suite.Semver2Server.Router.HandleContext(c)
+	case "per-chart-limit":
+		suite.PerChartLimitServer.Router.HandleContext(c)
+	case "artifacthub":
+		suite.ArtifactHubRepoIDServer.Router.HandleContext(c)
 	}
 
 	return c.Writer
@@ -199,6 +211,19 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 		},
 	}
 
+	// build the map of Artifact Hub Repo Ids from the StorageDirectory
+	// so we can test the /:repo/artifact-hub.yml route in TestRoutes
+	suite.ArtifactHubIds = map[string]string{"": "depth0"}
+	for depth1, v := range suite.StorageDirectory {
+		suite.ArtifactHubIds[depth1] = "depth1"
+		for depth2, v := range v {
+			suite.ArtifactHubIds[fmt.Sprintf("%s/%s", depth1, depth2)] = "depth2"
+			for _, depth3 := range v {
+				suite.ArtifactHubIds[fmt.Sprintf("%s/%s/%s", depth1, depth2, depth3)] = "depth3"
+			}
+		}
+	}
+
 	// Scaffold out test storage directory structure
 	for org, teams := range suite.StorageDirectory {
 		for team, repos := range teams {
@@ -230,6 +255,7 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 		ChartPostFormFieldName: "chart",
 		ProvPostFormFieldName:  "prov",
 		IndexLimit:             1,
+		ArtifactHubRepoID:      suite.ArtifactHubIds,
 	})
 	suite.NotNil(server)
 	suite.Nil(err, "no error creating new multitenant (depth=0) server")
@@ -249,6 +275,7 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 		EnableAPI:              true,
 		ChartPostFormFieldName: "chart",
 		ProvPostFormFieldName:  "prov",
+		ArtifactHubRepoID:      suite.ArtifactHubIds,
 	})
 	suite.NotNil(server)
 	suite.Nil(err, "no error creating new multitenant (depth=1) server")
@@ -267,6 +294,7 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 		EnableAPI:              true,
 		ChartPostFormFieldName: "chart",
 		ProvPostFormFieldName:  "prov",
+		ArtifactHubRepoID:      suite.ArtifactHubIds,
 	})
 	suite.NotNil(server)
 	suite.Nil(err, "no error creating new multitenant (depth=2) server")
@@ -285,6 +313,7 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 		EnableAPI:              true,
 		ChartPostFormFieldName: "chart",
 		ProvPostFormFieldName:  "prov",
+		ArtifactHubRepoID:      suite.ArtifactHubIds,
 	})
 	suite.NotNil(server)
 	suite.Nil(err, "no error creating new multitenant (depth=3) server")
@@ -335,10 +364,51 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 		AllowOverwrite:         true,
 		ChartPostFormFieldName: "chart",
 		ProvPostFormFieldName:  "prov",
+		CacheInterval:          time.Duration(time.Second),
 	})
 	suite.NotNil(server)
 	suite.Nil(err, "no error creating new overwrite server")
 	suite.OverwriteServer = server
+
+	router = cm_router.NewRouter(cm_router.RouterOptions{
+		Logger:        logger,
+		Depth:         0,
+		MaxUploadSize: maxUploadSize,
+	})
+
+	server, err = NewMultiTenantServer(MultiTenantServerOptions{
+		Logger:                 logger,
+		Router:                 router,
+		StorageBackend:         backend,
+		TimestampTolerance:     time.Duration(0),
+		EnableAPI:              true,
+		AllowOverwrite:         true,
+		ChartPostFormFieldName: "chart",
+	})
+	suite.NotNil(server)
+	suite.Nil(err, "no error creating semantic version server")
+	suite.Semver2Server = server
+
+	router = cm_router.NewRouter(cm_router.RouterOptions{
+		Logger:        logger,
+		Depth:         0,
+		MaxUploadSize: maxUploadSize,
+	})
+
+	server, err = NewMultiTenantServer(MultiTenantServerOptions{
+		Logger:                 logger,
+		Router:                 router,
+		StorageBackend:         backend,
+		TimestampTolerance:     time.Duration(0),
+		EnableAPI:              true,
+		AllowOverwrite:         true,
+		ChartPostFormFieldName: "chart",
+		CacheInterval:          time.Duration(time.Second),
+		PerChartLimit:          2,
+	})
+	suite.NotNil(server)
+	suite.Nil(err, "no error creating per-chart-limit server")
+	suite.PerChartLimitServer = server
 
 	router = cm_router.NewRouter(cm_router.RouterOptions{
 		Logger:        logger,
@@ -416,22 +486,48 @@ func (suite *MultiTenantServerTestSuite) SetupSuite() {
 	suite.NotNil(server)
 	suite.Nil(err, "no error creating new max upload size server")
 	suite.MaxUploadSizeServer = server
+
+	router = cm_router.NewRouter(cm_router.RouterOptions{
+		Logger:        logger,
+		Depth:         0,
+		MaxUploadSize: 1, // intentionally small
+	})
+	server, err = NewMultiTenantServer(MultiTenantServerOptions{
+		Logger:                 logger,
+		Router:                 router,
+		StorageBackend:         backend,
+		TimestampTolerance:     time.Duration(0),
+		EnableAPI:              true,
+		AllowOverwrite:         true,
+		ChartPostFormFieldName: "chart",
+		ProvPostFormFieldName:  "prov",
+		ArtifactHubRepoID:      suite.ArtifactHubIds,
+	})
+	suite.NotNil(server)
+	suite.Nil(err, "no error creating new artifact hub repo id server")
+	suite.ArtifactHubRepoIDServer = server
 }
 
 func (suite *MultiTenantServerTestSuite) TearDownSuite() {
-	err := os.RemoveAll(suite.TempDirectory)
-	suite.Nil(err, "no error deleting temp directory for local storage")
+	os.RemoveAll(suite.TempDirectory)
 }
 
-func (suite *MultiTenantServerTestSuite) TestRegenerateRepositoryIndex() {
+func (suite *MultiTenantServerTestSuite) regenerateRepositoryIndex(repo string, isFound bool) {
 	server := suite.Depth0Server
-
+	if repo != "" {
+		server = suite.Depth1Server
+	}
 	log := server.Logger.ContextLoggingFn(&gin.Context{})
 
-	entry, err := server.initCacheEntry(log, "")
+	entry, err := server.initCacheEntry(log, repo)
 	suite.Nil(err, "no error on init cache entry")
 
-	objects, err := server.fetchChartsInStorage(log, "")
+	objects, err := server.fetchChartsInStorage(log, repo)
+	if !isFound {
+		suite.Equal(len(objects), 0)
+		return
+	}
+	suite.Nil(err, "no error on fetchChartsInStorage")
 	diff := storage.GetObjectSliceDiff(server.getRepoObjectSlice(entry), objects, server.TimestampTolerance)
 	_, err = server.regenerateRepositoryIndexWorker(log, entry, diff)
 	suite.Nil(err, "no error regenerating repo index")
@@ -440,7 +536,8 @@ func (suite *MultiTenantServerTestSuite) TestRegenerateRepositoryIndex() {
 	err = os.Chtimes(suite.TestTarballFilename, newtime, newtime)
 	suite.Nil(err, "no error changing modtime on temp file")
 
-	objects, err = server.fetchChartsInStorage(log, "")
+	objects, err = server.fetchChartsInStorage(log, repo)
+	suite.Nil(err, "no error on fetchChartsInStorage")
 	diff = storage.GetObjectSliceDiff(server.getRepoObjectSlice(entry), objects, server.TimestampTolerance)
 	_, err = server.regenerateRepositoryIndexWorker(log, entry, diff)
 	suite.Nil(err, "no error regenerating repo index with tarball updated")
@@ -449,24 +546,33 @@ func (suite *MultiTenantServerTestSuite) TestRegenerateRepositoryIndex() {
 	destFile, err := os.Create(brokenTarballFilename)
 	suite.Nil(err, "no error creating new broken tarball in temp dir")
 	defer destFile.Close()
-	objects, err = server.fetchChartsInStorage(log, "")
+	objects, err = server.fetchChartsInStorage(log, repo)
+	suite.Nil(err, "no error on fetchChartsInStorage")
 	diff = storage.GetObjectSliceDiff(server.getRepoObjectSlice(entry), objects, server.TimestampTolerance)
 	_, err = server.regenerateRepositoryIndexWorker(log, entry, diff)
 	suite.Nil(err, "error not returned with broken tarball added")
 
 	err = os.Chtimes(brokenTarballFilename, newtime, newtime)
 	suite.Nil(err, "no error changing modtime on broken tarball")
-	objects, err = server.fetchChartsInStorage(log, "")
+	objects, err = server.fetchChartsInStorage(log, repo)
+	suite.Nil(err, "no error on fetchChartsInStorage")
 	diff = storage.GetObjectSliceDiff(server.getRepoObjectSlice(entry), objects, server.TimestampTolerance)
 	_, err = server.regenerateRepositoryIndexWorker(log, entry, diff)
 	suite.Nil(err, "error not returned with broken tarball updated")
 
 	err = os.Remove(brokenTarballFilename)
 	suite.Nil(err, "no error removing broken tarball")
-	objects, err = server.fetchChartsInStorage(log, "")
+	objects, err = server.fetchChartsInStorage(log, repo)
+	suite.Nil(err, "no error on fetchChartsInStorage")
 	diff = storage.GetObjectSliceDiff(server.getRepoObjectSlice(entry), objects, server.TimestampTolerance)
 	_, err = server.regenerateRepositoryIndexWorker(log, entry, diff)
 	suite.Nil(err, "error not returned with broken tarball removed")
+}
+
+func (suite *MultiTenantServerTestSuite) TestRegenerateRepositoryIndex() {
+	suite.regenerateRepositoryIndex("", true)
+	suite.regenerateRepositoryIndex("org1", true)
+	suite.regenerateRepositoryIndex("not-set-org", false)
 }
 
 func (suite *MultiTenantServerTestSuite) TestGenIndex() {
@@ -593,6 +699,14 @@ func (suite *MultiTenantServerTestSuite) TestDisabledDeleteServer() {
 	suite.Equal(404, res.Status(), "404 DELETE /api/charts/mychart/0.1.0")
 }
 
+func (suite *MultiTenantServerTestSuite) extractRepoEntryFromInternalCache(repo string) *cacheEntry {
+	local, ok := suite.OverwriteServer.InternalCacheStore.Load(repo)
+	if ok {
+		return local
+	}
+	return nil
+}
+
 func (suite *MultiTenantServerTestSuite) TestOverwriteServer() {
 	// Check if files can be overwritten
 	content, err := ioutil.ReadFile(testTarballPath)
@@ -603,6 +717,18 @@ func (suite *MultiTenantServerTestSuite) TestOverwriteServer() {
 	body = bytes.NewBuffer(content)
 	res = suite.doRequest("overwrite", "POST", "/api/charts", body, "")
 	suite.Equal(201, res.Status(), "201 POST /api/charts")
+
+	{
+		// waiting for the emit event
+		// the event is transferred via a channel , here do a simple wait for not changing the original structure
+		// only for testing purpose
+		time.Sleep(time.Second)
+		// depth: 0
+		e := suite.extractRepoEntryFromInternalCache("")
+		e.RepoLock.RLock()
+		suite.Equal(1, len(e.RepoIndex.Entries), "overwrite entries validation")
+		e.RepoLock.RUnlock()
+	}
 
 	content, err = ioutil.ReadFile(testProvfilePath)
 	suite.Nil(err, "no error opening test provenance file")
@@ -619,6 +745,15 @@ func (suite *MultiTenantServerTestSuite) TestOverwriteServer() {
 	buf, w = suite.getBodyWithMultipartFormFiles([]string{"chart", "prov"}, []string{testTarballPath, testProvfilePath})
 	res = suite.doRequest("overwrite", "POST", "/api/charts", buf, w.FormDataContentType())
 	suite.Equal(201, res.Status(), "201 POST /api/charts")
+	{
+		// the same as chart only case above
+		time.Sleep(time.Second)
+		// depth: 0
+		e := suite.extractRepoEntryFromInternalCache("")
+		e.RepoLock.RLock()
+		suite.Equal(1, len(e.RepoIndex.Entries), "overwrite entries validation")
+		e.RepoLock.RUnlock()
+	}
 }
 
 func (suite *MultiTenantServerTestSuite) TestBadChartUpload() {
@@ -719,6 +854,38 @@ func (suite *MultiTenantServerTestSuite) TestMaxObjectsServer() {
 	suite.Equal(507, res.Status(), "507 POST /api/prov")
 }
 
+func (suite *MultiTenantServerTestSuite) TestPerChartLimit() {
+	ns := "per-chart-limit"
+	content, err := ioutil.ReadFile(testTarballPathV0)
+	suite.Nil(err, "no error opening test tarball")
+	body := bytes.NewBuffer(content)
+	res := suite.doRequest(ns, "POST", "/api/charts", body, "")
+	suite.Equal(201, res.Status(), "201 POST /api/charts")
+
+	content, err = ioutil.ReadFile(testTarballPathV2)
+	suite.Nil(err, "no error opening test tarball")
+	body = bytes.NewBuffer(content)
+	res = suite.doRequest(ns, "POST", "/api/charts", body, "")
+	suite.Equal(201, res.Status(), "201 POST /api/charts")
+
+	content, err = ioutil.ReadFile(testTarballPath)
+	suite.Nil(err, "no error opening test tarball")
+	body = bytes.NewBuffer(content)
+	res = suite.doRequest(ns, "POST", "/api/charts", body, "")
+	suite.Equal(201, res.Status(), "201 POST /api/charts")
+
+	time.Sleep(time.Second)
+
+	res = suite.doRequest(ns, "GET", "/api/charts/mychart/0.2.0", nil, "")
+	suite.Equal(200, res.Status(), "200 GET /api/charts/mychart-0.2.0")
+
+	res = suite.doRequest(ns, "GET", "/api/charts/mychart/0.1.0", nil, "")
+	suite.Equal(200, res.Status(), "200 GET /api/charts/mychart-0.1.0")
+
+	res = suite.doRequest(ns, "GET", "/api/charts/mychart/0.0.1", nil, "")
+	suite.Equal(404, res.Status(), "200 GET /api/charts/mychart-0.0.1")
+}
+
 func (suite *MultiTenantServerTestSuite) TestMaxUploadSizeServer() {
 	// trigger 413s, "request too large"
 	content, err := ioutil.ReadFile(testTarballPath)
@@ -783,6 +950,17 @@ func (suite *MultiTenantServerTestSuite) TestMetrics() {
 	suite.True(strings.Contains(metrics, "chartmuseum_chart_versions_served_total{repo=\"b\"} 0"))
 }
 
+func (suite *MultiTenantServerTestSuite) TestArtifactHubRepoID() {
+	buffer := bytes.NewBufferString("")
+	res := suite.doRequest("artifacthub", "GET", "/artifacthub-repo.yml", nil, "", buffer)
+	suite.Equal(200, res.Status(), "200 GET /artifacthub-repo.yml")
+
+	artifactHubYmlString := buffer.Bytes()
+	artifactHubYmlFile := &repo.ArtifactHubFile{}
+	yaml.Unmarshal(artifactHubYmlString, artifactHubYmlFile)
+	suite.Equal(artifactHubYmlFile.RepoID, suite.ArtifactHubIds[""])
+}
+
 func (suite *MultiTenantServerTestSuite) TestRoutes() {
 	suite.testAllRoutes("", 0)
 	for org, teams := range suite.StorageDirectory {
@@ -819,6 +997,10 @@ func (suite *MultiTenantServerTestSuite) testAllRoutes(repo string, depth int) {
 	// GET /:repo/index.yaml
 	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/index.yaml", repoPrefix), nil, "")
 	suite.Equal(200, res.Status(), fmt.Sprintf("200 GET %s/index.yaml", repoPrefix))
+
+	// GET /:repo/artifacthub-repo.yaml
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/artifacthub-repo.yml", repoPrefix), nil, "")
+	suite.Equal(200, res.Status(), fmt.Sprintf("200 GET %s/artifacthub-repo.yml", repoPrefix))
 
 	// Issue #21
 	suite.NotEqual("", res.Header().Get("X-Request-Id"), "X-Request-Id header is present")
@@ -885,6 +1067,32 @@ func (suite *MultiTenantServerTestSuite) testAllRoutes(repo string, depth int) {
 	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/fakechart/0.1.0", apiPrefix), nil, "")
 	suite.Equal(404, res.Status(), fmt.Sprintf("200 GET %s/charts/fakechart/0.1.0", apiPrefix))
 
+	// GET /api/:repo/charts/:name/:version/templates
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/mychart/0.1.0/templates", apiPrefix), nil, "")
+	suite.Equal(200, res.Status(), fmt.Sprintf("200 GET %s/charts/mychart/0.1.0/templates", apiPrefix))
+
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/mychart/latest/templates", apiPrefix), nil, "")
+	suite.Equal(200, res.Status(), fmt.Sprintf("200 GET %s/charts/mychart/latest/templates", apiPrefix))
+
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/mychart/0.1.1/templates", apiPrefix), nil, "")
+	suite.Equal(404, res.Status(), fmt.Sprintf("404 GET %s/charts/mychart/0.1.1/templates", apiPrefix))
+
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/fakechart/0.1.0/templates", apiPrefix), nil, "")
+	suite.Equal(404, res.Status(), fmt.Sprintf("404 GET %s/charts/fakechart/0.1.0/templates", apiPrefix))
+
+	// GET /api/:repo/charts/:name/:version/values
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/mychart/0.1.0/values", apiPrefix), nil, "")
+	suite.Equal(200, res.Status(), fmt.Sprintf("200 GET %s/charts/mychart/0.1.0/values", apiPrefix))
+
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/mychart/latest/values", apiPrefix), nil, "")
+	suite.Equal(200, res.Status(), fmt.Sprintf("200 GET %s/charts/mychart/latest/values", apiPrefix))
+
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/mychart/0.1.1/values", apiPrefix), nil, "")
+	suite.Equal(404, res.Status(), fmt.Sprintf("404 GET %s/charts/mychart/0.1.1/values", apiPrefix))
+
+	res = suite.doRequest(stype, "GET", fmt.Sprintf("%s/charts/fakechart/0.1.0/values", apiPrefix), nil, "")
+	suite.Equal(404, res.Status(), fmt.Sprintf("404 GET %s/charts/fakechart/0.1.0/values", apiPrefix))
+
 	// HEAD /api/:repo/charts/:name/:version
 	res = suite.doRequest(stype, "HEAD", fmt.Sprintf("%s/charts/mychart/0.1.0", apiPrefix), nil, "")
 	suite.Equal(200, res.Status(), fmt.Sprintf("200 HEAD %s/charts/mychart/0.1.0", apiPrefix))
@@ -912,7 +1120,7 @@ func (suite *MultiTenantServerTestSuite) testAllRoutes(repo string, depth int) {
 	// POST /api/:repo/charts
 	body := bytes.NewBuffer([]byte{})
 	res = suite.doRequest(stype, "POST", fmt.Sprintf("%s/charts", apiPrefix), body, "")
-	suite.Equal(500, res.Status(), fmt.Sprintf("500 POST %s/charts", apiPrefix))
+	suite.Equal(400, res.Status(), fmt.Sprintf("400 POST %s/charts", apiPrefix))
 
 	// POST /api/:repo/prov
 	body = bytes.NewBuffer([]byte{})

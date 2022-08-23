@@ -17,9 +17,9 @@ limitations under the License.
 package multitenant
 
 import (
-	cm_router "helm.sh/chartmuseum/pkg/chartmuseum/router"
-
 	cm_auth "github.com/chartmuseum/auth"
+
+	cm_router "helm.sh/chartmuseum/pkg/chartmuseum/router"
 )
 
 func (s *MultiTenantServer) Routes() []*cm_router.Route {
@@ -27,7 +27,12 @@ func (s *MultiTenantServer) Routes() []*cm_router.Route {
 
 	serverInfoRoutes := []*cm_router.Route{
 		{"GET", "/", s.getWelcomePageHandler, cm_auth.PullAction},
+		{"GET", "/info", s.getInfoHandler, ""},
 		{"GET", "/health", s.getHealthCheckHandler, ""},
+	}
+
+	artifactHubRoutes := []*cm_router.Route{
+		{"GET", "/artifacthub-repo.yml", s.getArtifactHubFileRequestHandler, cm_auth.PullAction},
 	}
 
 	helmChartRepositoryRoutes := []*cm_router.Route{
@@ -41,12 +46,27 @@ func (s *MultiTenantServer) Routes() []*cm_router.Route {
 		{"GET", "/api/:repo/charts/:name", s.getChartRequestHandler, cm_auth.PullAction},
 		{"HEAD", "/api/:repo/charts/:name/:version", s.headChartVersionRequestHandler, cm_auth.PullAction},
 		{"GET", "/api/:repo/charts/:name/:version", s.getChartVersionRequestHandler, cm_auth.PullAction},
+		{"GET", "/api/:repo/charts/:name/:version/templates", s.getStorageObjectTemplateRequestHandler, cm_auth.PullAction},
+		{"GET", "/api/:repo/charts/:name/:version/values", s.getStorageObjectValuesRequestHandler, cm_auth.PullAction},
 		{"POST", "/api/:repo/charts", s.postRequestHandler, cm_auth.PushAction},
 		{"POST", "/api/:repo/prov", s.postProvenanceFileRequestHandler, cm_auth.PushAction},
 	}
 
 	routes = append(routes, serverInfoRoutes...)
 	routes = append(routes, helmChartRepositoryRoutes...)
+
+	if len(s.ArtifactHubRepoID) != 0 {
+		routes = append(routes, artifactHubRoutes...)
+	}
+
+	if s.WebTemplatePath != "" {
+		routes = append(routes, &cm_router.Route{
+			Method:  "GET",
+			Path:    "/static",
+			Handler: s.getStaticFilesHandler,
+			Action:  cm_auth.PullAction,
+		})
+	}
 
 	if s.APIEnabled {
 		routes = append(routes, chartManipulationRoutes...)

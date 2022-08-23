@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/chartmuseum/storage"
+
 	"helm.sh/chartmuseum/pkg/cache"
 	cm_logger "helm.sh/chartmuseum/pkg/chartmuseum/logger"
 	cm_router "helm.sh/chartmuseum/pkg/chartmuseum/router"
@@ -33,6 +34,7 @@ type (
 		StorageBackend         storage.Backend
 		ExternalCacheStore     cache.Store
 		TimestampTolerance     time.Duration
+		Logger                 *cm_logger.Logger
 		ChartURL               string
 		TlsCert                string
 		TlsKey                 string
@@ -42,9 +44,8 @@ type (
 		ChartPostFormFieldName string
 		ProvPostFormFieldName  string
 		ContextPath            string
-		LogJSON                bool
 		LogHealth              bool
-		Debug                  bool
+		LogLatencyInteger      bool
 		EnableAPI              bool
 		UseStatefiles          bool
 		AllowOverwrite         bool
@@ -61,10 +62,25 @@ type (
 		AuthRealm              string
 		AuthService            string
 		AuthCertPath           string
+		AuthActionsSearchPath  string
 		DepthDynamic           bool
 		CORSAllowOrigin        string
 		ReadTimeout            int
 		WriteTimeout           int
+		CacheInterval          time.Duration
+		Host                   string
+		Version                string
+		WebTemplatePath        string
+		ArtifactHubRepoID      map[string]string
+		// PerChartLimit allow museum server to keep max N version Charts
+		// And avoid swelling too large(if so , the index genertion will become slow)
+		PerChartLimit int
+		// Deprecated: see https://github.com/helm/chartmuseum/issues/485 for more info
+		EnforceSemver2 bool
+		// Deprecated: Debug is no longer effective. ServerOptions now requires the Logger field to be set and configured with LoggerOptions accordingly.
+		Debug bool
+		// Deprecated: LogJSON is no longer effective. ServerOptions now requires the Logger field to be set and configured with LoggerOptions accordingly.
+		LogJSON bool
 	}
 
 	// Server is a generic interface for web servers
@@ -75,44 +91,39 @@ type (
 
 // NewServer creates a new Server instance
 func NewServer(options ServerOptions) (Server, error) {
-	logger, err := cm_logger.NewLogger(cm_logger.LoggerOptions{
-		Debug:   options.Debug,
-		LogJSON: options.LogJSON,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	contextPath := strings.TrimSuffix(options.ContextPath, "/")
 	if contextPath != "" && !strings.HasPrefix(contextPath, "/") {
 		contextPath = "/" + contextPath
 	}
 
 	router := cm_router.NewRouter(cm_router.RouterOptions{
-		Logger:          logger,
-		Username:        options.Username,
-		Password:        options.Password,
-		ContextPath:     contextPath,
-		TlsCert:         options.TlsCert,
-		TlsKey:          options.TlsKey,
-		TlsCACert:       options.TlsCACert,
-		LogHealth:       options.LogHealth,
-		EnableMetrics:   options.EnableMetrics,
-		AnonymousGet:    options.AnonymousGet,
-		Depth:           options.Depth,
-		MaxUploadSize:   options.MaxUploadSize,
-		BearerAuth:      options.BearerAuth,
-		AuthRealm:       options.AuthRealm,
-		AuthService:     options.AuthService,
-		AuthCertPath:    options.AuthCertPath,
-		DepthDynamic:    options.DepthDynamic,
-		CORSAllowOrigin: options.CORSAllowOrigin,
-		ReadTimeout:     options.ReadTimeout,
-		WriteTimeout:    options.WriteTimeout,
+		Logger:                options.Logger,
+		LogLatencyInteger:     options.LogLatencyInteger,
+		Username:              options.Username,
+		Password:              options.Password,
+		ContextPath:           contextPath,
+		TlsCert:               options.TlsCert,
+		TlsKey:                options.TlsKey,
+		TlsCACert:             options.TlsCACert,
+		LogHealth:             options.LogHealth,
+		EnableMetrics:         options.EnableMetrics,
+		AnonymousGet:          options.AnonymousGet,
+		Depth:                 options.Depth,
+		MaxUploadSize:         options.MaxUploadSize,
+		BearerAuth:            options.BearerAuth,
+		AuthRealm:             options.AuthRealm,
+		AuthService:           options.AuthService,
+		AuthCertPath:          options.AuthCertPath,
+		AuthActionsSearchPath: options.AuthActionsSearchPath,
+		DepthDynamic:          options.DepthDynamic,
+		CORSAllowOrigin:       options.CORSAllowOrigin,
+		ReadTimeout:           options.ReadTimeout,
+		WriteTimeout:          options.WriteTimeout,
+		Host:                  options.Host,
 	})
 
 	server, err := mt.NewMultiTenantServer(mt.MultiTenantServerOptions{
-		Logger:                 logger,
+		Logger:                 options.Logger,
 		Router:                 router,
 		StorageBackend:         options.StorageBackend,
 		ExternalCacheStore:     options.ExternalCacheStore,
@@ -128,6 +139,14 @@ func NewServer(options ServerOptions) (Server, error) {
 		UseStatefiles:          options.UseStatefiles,
 		AllowOverwrite:         options.AllowOverwrite,
 		AllowForceOverwrite:    options.AllowForceOverwrite,
+		Version:                options.Version,
+		CacheInterval:          options.CacheInterval,
+		PerChartLimit:          options.PerChartLimit,
+		ArtifactHubRepoID:      options.ArtifactHubRepoID,
+		WebTemplatePath:        options.WebTemplatePath,
+		// Deprecated options
+		// EnforceSemver2 - see https://github.com/helm/chartmuseum/issues/485 for more info
+		EnforceSemver2: options.EnforceSemver2,
 	})
 
 	return server, err

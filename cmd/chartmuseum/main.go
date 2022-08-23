@@ -23,8 +23,10 @@ import (
 	"strings"
 
 	"github.com/chartmuseum/storage"
+
 	"helm.sh/chartmuseum/pkg/cache"
 	"helm.sh/chartmuseum/pkg/chartmuseum"
+	cm_logger "helm.sh/chartmuseum/pkg/chartmuseum/logger"
 	"helm.sh/chartmuseum/pkg/config"
 
 	"github.com/urfave/cli"
@@ -59,12 +61,24 @@ func cliHandler(c *cli.Context) {
 		crash(err)
 	}
 
+	logger, err := cm_logger.NewLogger(cm_logger.LoggerOptions{
+		Debug:   conf.GetBool("debug"),
+		LogJSON: conf.GetBool("logjson"),
+	})
+	if err != nil {
+		crash(err)
+	}
+
+	conf.ShowDeprecationWarnings(c, logger)
+
 	backend := backendFromConfig(conf)
 	store := storeFromConfig(conf)
 
 	options := chartmuseum.ServerOptions{
+		Version:                Version,
 		StorageBackend:         backend,
 		ExternalCacheStore:     store,
+		Logger:                 logger,
 		TimestampTolerance:     conf.GetDuration("storage.timestamptolerance"),
 		ChartURL:               conf.GetString("charturl"),
 		TlsCert:                conf.GetString("tls.cert"),
@@ -75,15 +89,14 @@ func cliHandler(c *cli.Context) {
 		ChartPostFormFieldName: conf.GetString("chartpostformfieldname"),
 		ProvPostFormFieldName:  conf.GetString("provpostformfieldname"),
 		ContextPath:            conf.GetString("contextpath"),
-		LogJSON:                conf.GetBool("logjson"),
 		LogHealth:              conf.GetBool("loghealth"),
-		Debug:                  conf.GetBool("debug"),
+		LogLatencyInteger:      conf.GetBool("loglatencyinteger"),
 		EnableAPI:              !conf.GetBool("disableapi"),
 		DisableDelete:          conf.GetBool("disabledelete"),
 		UseStatefiles:          !conf.GetBool("disablestatefiles"),
 		AllowOverwrite:         conf.GetBool("allowoverwrite"),
 		AllowForceOverwrite:    !conf.GetBool("disableforceoverwrite"),
-		EnableMetrics:          !conf.GetBool("disablemetrics"),
+		EnableMetrics:          conf.GetBool("enablemetrics"),
 		AnonymousGet:           conf.GetBool("authanonymousget"),
 		GenIndex:               conf.GetBool("genindex"),
 		MaxStorageObjects:      conf.GetInt("maxstorageobjects"),
@@ -94,10 +107,17 @@ func cliHandler(c *cli.Context) {
 		AuthRealm:              conf.GetString("authrealm"),
 		AuthService:            conf.GetString("authservice"),
 		AuthCertPath:           conf.GetString("authcertpath"),
+		AuthActionsSearchPath:  conf.GetString("authactionssearchpath"),
 		DepthDynamic:           conf.GetBool("depthdynamic"),
 		CORSAllowOrigin:        conf.GetString("cors.alloworigin"),
 		WriteTimeout:           conf.GetInt("writetimeout"),
 		ReadTimeout:            conf.GetInt("readtimeout"),
+		EnforceSemver2:         conf.GetBool("enforce-semver2"),
+		CacheInterval:          conf.GetDuration("cacheinterval"),
+		Host:                   conf.GetString("listen.host"),
+		PerChartLimit:          conf.GetInt("per-chart-limit"),
+		WebTemplatePath:        conf.GetString("web-template-path"),
+		ArtifactHubRepoID:      conf.GetStringMapString("artifact-hub-repo-id"),
 	}
 
 	server, err := newServer(options)
@@ -146,9 +166,9 @@ func backendFromConfig(conf *config.Config) storage.Backend {
 
 func localBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.local.rootdir"})
-	return storage.Backend(storage.NewLocalFilesystemBackend(
+	return storage.NewLocalFilesystemBackend(
 		conf.GetString("storage.local.rootdir"),
-	))
+	)
 }
 
 func amazonBackendFromConfig(conf *config.Config) storage.Backend {
@@ -157,68 +177,82 @@ func amazonBackendFromConfig(conf *config.Config) storage.Backend {
 		conf.Set("storage.amazon.region", "us-east-1")
 	}
 	crashIfConfigMissingVars(conf, []string{"storage.amazon.bucket", "storage.amazon.region"})
-	return storage.Backend(storage.NewAmazonS3Backend(
+	return storage.NewAmazonS3Backend(
 		conf.GetString("storage.amazon.bucket"),
 		conf.GetString("storage.amazon.prefix"),
 		conf.GetString("storage.amazon.region"),
 		conf.GetString("storage.amazon.endpoint"),
 		conf.GetString("storage.amazon.sse"),
-	))
+	)
 }
 
 func googleBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.google.bucket"})
-	return storage.Backend(storage.NewGoogleCSBackend(
+	return storage.NewGoogleCSBackend(
 		conf.GetString("storage.google.bucket"),
 		conf.GetString("storage.google.prefix"),
-	))
+	)
 }
 
 func oracleBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.oracle.bucket", "storage.oracle.compartmentid"})
-	return storage.Backend(storage.NewOracleCSBackend(
+	return storage.NewOracleCSBackend(
 		conf.GetString("storage.oracle.bucket"),
 		conf.GetString("storage.oracle.prefix"),
 		conf.GetString("storage.oracle.region"),
 		conf.GetString("storage.oracle.compartmentid"),
-	))
+	)
 }
 
 func microsoftBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.microsoft.container"})
-	return storage.Backend(storage.NewMicrosoftBlobBackend(
+	return storage.NewMicrosoftBlobBackend(
 		conf.GetString("storage.microsoft.container"),
 		conf.GetString("storage.microsoft.prefix"),
-	))
+	)
 }
 
 func alibabaBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.alibaba.bucket"})
-	return storage.Backend(storage.NewAlibabaCloudOSSBackend(
+	return storage.NewAlibabaCloudOSSBackend(
 		conf.GetString("storage.alibaba.bucket"),
 		conf.GetString("storage.alibaba.prefix"),
 		conf.GetString("storage.alibaba.endpoint"),
 		conf.GetString("storage.alibaba.sse"),
-	))
+	)
 }
 
 func openstackBackendFromConfig(conf *config.Config) storage.Backend {
-	crashIfConfigMissingVars(conf, []string{"storage.openstack.container", "storage.openstack.region"})
-	return storage.Backend(storage.NewOpenstackOSBackend(
-		conf.GetString("storage.openstack.container"),
-		conf.GetString("storage.openstack.prefix"),
-		conf.GetString("storage.openstack.region"),
-		conf.GetString("storage.openstack.cacert"),
-	))
+	var backend storage.Backend
+	switch conf.GetString("storage.openstack.auth") {
+	case "v1":
+		crashIfConfigMissingVars(conf, []string{"storage.openstack.container"})
+		backend = storage.NewOpenstackOSBackendV1Auth(
+			conf.GetString("storage.openstack.container"),
+			conf.GetString("storage.openstack.prefix"),
+			conf.GetString("storage.openstack.cacert"),
+		)
+	case "auto":
+		crashIfConfigMissingVars(conf, []string{"storage.openstack.container", "storage.openstack.region"})
+		backend = storage.NewOpenstackOSBackend(
+			conf.GetString("storage.openstack.container"),
+			conf.GetString("storage.openstack.prefix"),
+			conf.GetString("storage.openstack.region"),
+			conf.GetString("storage.openstack.cacert"),
+		)
+	default:
+		crash("Unsupported OpenStack auth protocol: ", conf.GetString("storage.openstack.auth"))
+	}
+	return backend
 }
 
 func baiduBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.baidu.bucket"})
-	return storage.Backend(storage.NewBaiDuBOSBackend(
+	return storage.NewBaiDuBOSBackend(
 		conf.GetString("storage.baidu.bucket"),
 		conf.GetString("storage.baidu.prefix"),
 		conf.GetString("storage.baidu.endpoint"),
-	))
+	)
 }
 
 func etcdBackendFromConfig(conf *config.Config) storage.Backend {
@@ -226,31 +260,31 @@ func etcdBackendFromConfig(conf *config.Config) storage.Backend {
 		"storage.etcd.certfile",
 		"storage.etcd.keyfile",
 		"storage.etcd.prefix"})
-	return storage.Backend(storage.NewEtcdCSBackend(
+	return storage.NewEtcdCSBackend(
 		conf.GetString("storage.etcd.endpoint"),
 		conf.GetString("storage.etcd.cafile"),
 		conf.GetString("storage.etcd.certfile"),
 		conf.GetString("storage.etcd.keyfile"),
 		conf.GetString("storage.etcd.prefix"),
-	))
+	)
 }
 
 func tencentBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.tencent.bucket"})
-	return storage.Backend(storage.NewTencentCloudCOSBackend(
+	return storage.NewTencentCloudCOSBackend(
 		conf.GetString("storage.tencent.bucket"),
 		conf.GetString("storage.tencent.prefix"),
 		conf.GetString("storage.tencent.endpoint"),
-	))
+	)
 }
 
 func neteaseBackendFromConfig(conf *config.Config) storage.Backend {
 	crashIfConfigMissingVars(conf, []string{"storage.netease.bucket"})
-	return storage.Backend(storage.NewNeteaseNOSBackend(
+	return storage.NewNeteaseNOSBackend(
 		conf.GetString("storage.netease.bucket"),
 		conf.GetString("storage.netease.prefix"),
 		conf.GetString("storage.netease.endpoint"),
-	))
+	)
 }
 
 func storeFromConfig(conf *config.Config) cache.Store {
@@ -281,7 +315,7 @@ func redisCacheFromConfig(conf *config.Config) cache.Store {
 }
 
 func crashIfConfigMissingVars(conf *config.Config, vars []string) {
-	missing := []string{}
+	var missing []string
 	for _, v := range vars {
 		if conf.GetString(v) == "" {
 			flag := config.GetCLIFlagFromVarName(v)
