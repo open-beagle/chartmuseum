@@ -7,7 +7,7 @@ git remote add upstream git@github.com:helm/chartmuseum.git
 
 git fetch upstream
 
-git merge v0.12.0
+git merge v0.15.0
 ```
 
 ## cache
